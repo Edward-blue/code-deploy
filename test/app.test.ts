@@ -9,6 +9,13 @@ import { newProfile, type Profile } from "../src/config.js";
 
 const profile = { ...newProfile(), id: "example", name: "测试环境", host: "example.test", user: "deploy", remoteDir: "/srv/web" };
 
+// 预检包含真实子进程，帧出现时间不定：轮询直至匹配。
+const waitFor = async (instance: { lastFrame: () => string | undefined }, pattern: RegExp, timeout = 5000) => {
+  const start = Date.now();
+  while (Date.now() - start < timeout && !pattern.test(instance.lastFrame() ?? "")) await setTimeout(50);
+  assert.match(instance.lastFrame()!, pattern);
+};
+
 // 键盘驱动真实组件：纵向列表选择，向导编辑时已答项留在上方。
 test("TUI 环境列表、发布默认取消和向导编辑", async () => {
   const instance = render(createElement(App, { initialConfig: { version: 1, profiles: [profile] } }));
@@ -83,11 +90,11 @@ test("TUI 显示 Git 提醒并等待选择，拒绝后结束发布", async () =>
   try {
     await setTimeout(80);
     instance.stdin.write("\r"); await setTimeout(60);
-    instance.stdin.write("y"); await setTimeout(250);
-    assert.match(instance.lastFrame()!, /Git 状态需要确认/);
+    instance.stdin.write("y");
+    await waitFor(instance, /Git 状态需要确认/);
     assert.match(instance.lastFrame()!, /尚未执行构建或上传/);
-    instance.stdin.write("n"); await setTimeout(80);
-    assert.match(instance.lastFrame()!, /已取消发布/);
+    instance.stdin.write("n");
+    await waitFor(instance, /已取消发布/);
   } finally { instance.unmount(); instance.cleanup(); }
 });
 

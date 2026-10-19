@@ -2,6 +2,16 @@
 
 基于 Ink 8、React 和 `@inkjs/ui`，把本地目录 A 的内容发布到 SSH 服务器目录 B。支持直接发布已有内容，或先执行自定义构建命令。工具不包含任何业务环境、服务器或分支预设；真实配置仅存用户目录。
 
+## 安装
+
+```sh
+npm i -g @akairos/code-deploy
+# 或
+bun add -g @akairos/code-deploy
+```
+
+兼容 Node.js 22+ 与 Bun。
+
 ## 启动
 
 需要 Node.js 22+、pnpm、本地 `ssh`、`scp`、`tar`、`find`。启用 Git 检查或分支锁时需要 `git`。远端需要 POSIX shell 和常用文件命令。

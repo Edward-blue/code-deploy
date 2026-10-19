@@ -1,9 +1,10 @@
-import { AsyncEntry } from "@napi-rs/keyring";
+import { Entry } from "@napi-rs/keyring";
 import type { Profile } from "./config.js";
 
 // 凭据绑定环境及服务器，编辑目标后不会误用旧服务器密码。
-function entry(profile: Profile): AsyncEntry {
-  return new AsyncEntry("code-deploy", `${profile.id}:${profile.user}@${profile.host}:${profile.port}`);
+// 用同步 Entry 而非 AsyncEntry：后者的 AbortSignal 封装在 Bun 下不可用。
+function entry(profile: Profile): Entry {
+  return new Entry("code-deploy", `${profile.id}:${profile.user}@${profile.host}:${profile.port}`);
 }
 
 export async function savePassword(profile: Profile, password: string): Promise<void> {
