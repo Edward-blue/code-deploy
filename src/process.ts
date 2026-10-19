@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { stripVTControlCharacters } from "node:util";
 
-type RunOptions = { cwd?: string; env?: NodeJS.ProcessEnv; signal?: AbortSignal; onOutput?: (text: string) => void };
+type RunOptions = { cwd?: string; env?: NodeJS.ProcessEnv; signal?: AbortSignal; onOutput?: (text: string) => void; shell?: boolean };
 export type { RunOptions };
 
 // 参数以数组传递，只有用户明确配置的构建命令通过 shell 执行。
@@ -9,7 +9,7 @@ export function run(command: string, args: string[], options: RunOptions = {}): 
   if (options.signal?.aborted) return Promise.reject(new Error("操作已取消"));
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
-      cwd: options.cwd, env: options.env, stdio: ["ignore", "pipe", "pipe"],
+      cwd: options.cwd, env: options.env, shell: options.shell, stdio: ["ignore", "pipe", "pipe"],
       detached: process.platform !== "win32"
     });
     let output = "";

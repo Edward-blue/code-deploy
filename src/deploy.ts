@@ -17,8 +17,11 @@ async function withSsh<T>(profile: Profile, task: (ssh: (command: string, args: 
   const password = await resolvePassword(profile);
   const temporary = await mkdtemp(path.join(tmpdir(), "code-deploy-ssh-"));
   try {
-    const askpass = path.join(temporary, "askpass.sh");
-    if (password) await writeFile(askpass, '#!/bin/sh\nprintf "%s\\n" "$CODE_DEPLOY_SSH_PASSWORD"\n', { mode: 0o700 });
+    // shortcut: Windows 密码认证依赖 Win32-OpenSSH 的 SSH_ASKPASS 支持，未实测；建议密钥或 agent
+    const askpass = path.join(temporary, process.platform === "win32" ? "askpass.cmd" : "askpass.sh");
+    if (password) await writeFile(askpass, process.platform === "win32"
+      ? '@echo off\r\necho %CODE_DEPLOY_SSH_PASSWORD%\r\n'
+      : '#!/bin/sh\nprintf "%s\\n" "$CODE_DEPLOY_SSH_PASSWORD"\n', { mode: 0o700 });
     const base = ["-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3", "-o", "NumberOfPasswordPrompts=1"];
     if (!password) base.push("-o", "BatchMode=yes");
     return await task((command, args, options = {}) => run(command,
@@ -114,7 +117,8 @@ export async function deploy(profile: Profile, emit: (event: DeployEvent) => voi
   // 构建前核验凭据，避免构建完成才发现没有密码。
   await resolvePassword(profile);
   step(1);
-  if (profile.buildCommand) await run("/bin/sh", ["-c", profile.buildCommand], { cwd: project.directory, signal, onOutput: log });
+  // shell:true 由 Node 按平台选择 /bin/sh 或 cmd.exe
+  if (profile.buildCommand) await run(profile.buildCommand, [], { shell: true, cwd: project.directory, signal, onOutput: log });
   else log("未配置构建命令，直接发布现有目录内容\n");
   const current = await inspectProject(profile, signal);
   if (current.directory !== project.directory || current.branch !== project.branch || current.commit !== project.commit) {

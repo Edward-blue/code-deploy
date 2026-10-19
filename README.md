@@ -14,7 +14,9 @@ bun add -g @akairos/code-deploy
 
 ## 启动
 
-需要 Node.js 22+、pnpm、本地 `ssh`、`scp`、`tar`、`find`。启用 Git 检查或分支锁时需要 `git`。远端需要 POSIX shell 和常用文件命令。
+需要 Node.js 22+（或 Bun）、pnpm、本地 `ssh`、`scp`、`tar`、`find`。启用 Git 检查或分支锁时需要 `git`。远端需要 POSIX shell 和常用文件命令。
+
+Windows：`ssh`/`scp` 需启用 OpenSSH 客户端（Win10 1809+，设置→应用→可选功能），`tar` 系统自带；构建命令通过 `cmd.exe` 执行。密码认证在 Windows 未验证（Win32-OpenSSH 的 SSH_ASKPASS 支持不完整），建议使用 SSH 密钥或 agent。
 
 ```sh
 pnpm install
