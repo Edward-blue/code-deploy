@@ -5,12 +5,19 @@ import path from "node:path";
 import { test } from "node:test";
 import { isSafeRemoteDir, loadConfig, profileSchema, saveConfig, newProfile, type Profile } from "../src/config.js";
 import { deploy, formatRemoteOutput, quote, remoteDeployScript, run } from "../src/deploy.js";
+import { resolvePassword } from "../src/credentials.js";
 
 const profile: Profile = {
   ...newProfile(), checkGit: false, lockBranch: true, id: "test", name: "测试", projectDir: "/tmp/project", host: "example.test", user: "deploy", port: 22,
   remoteDir: "/data/web/test/dist", buildCommand: "mkdir -p dist && printf new > dist/index.html",
   outputDir: "dist", expectedBranch: "main", auth: "ssh", passwordEnv: "TEST_DEPLOY_PASSWORD"
 };
+
+test("内联密码字段优先于环境变量和钥匙串", async () => {
+  const inline = profileSchema.parse({ ...newProfile(), id: "inline", name: "内联", host: "example.test", remoteDir: "/srv/app", auth: "env", passwordEnv: "NOPE", password: "inline-secret" });
+  assert.equal(await resolvePassword(inline), "inline-secret");
+  assert.equal(inline.password, "inline-secret"); // 保存/加载往返不丢失
+});
 
 test("配置校验、原子保存、文件权限和损坏文件保护", async () => {
   const temporary = await mkdtemp(path.join(tmpdir(), "code-deploy-config-test-"));

@@ -35,6 +35,7 @@ export const profileSchema = z.object({
   expectedBranch: singleLine,
   auth: z.enum(["env", "keychain", "ssh"]),
   passwordEnv: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "环境变量名称无效"),
+  password: singleLine.optional(),
   lockDirectory: z.boolean().default(false),
   lockBranch: z.boolean().default(false),
   lockMapping: z.boolean().default(false),

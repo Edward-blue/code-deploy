@@ -17,7 +17,9 @@ export async function deletePassword(profile: Profile): Promise<void> {
 }
 
 // 密码仅传给 SSH 子进程，不写配置、命令行参数或日志。
+// password 字段是例外：用户明确写入配置文件的明文密码，本地存储，优先生效。
 export async function resolvePassword(profile: Profile): Promise<string | undefined> {
+  if (profile.password) return profile.password;
   if (profile.auth === "ssh") return undefined;
   const password = profile.auth === "env" ? process.env[profile.passwordEnv] : await entry(profile).getPassword();
   if (!password) throw new Error(profile.auth === "env"
