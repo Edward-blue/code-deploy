@@ -5,7 +5,8 @@
   "description": "Configurable local-to-SSH directory publishing with an Ink terminal interface",
   "type": "module",
   "bin": {
-    "code-deploy": "dist/cli.js"
+    "code-deploy": "dist/cli.js",
+    "coded": "dist/cli.js"
   },
   "files": [
     "dist"

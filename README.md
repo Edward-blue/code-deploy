@@ -10,7 +10,7 @@ npm i -g @akairos/code-deploy
 bun add -g @akairos/code-deploy
 ```
 
-兼容 Node.js 22+ 与 Bun。
+兼容 Node.js 22+ 与 Bun。`code-deploy` 的短命令为 `coded`，二者等价。
 
 ## 启动
 
