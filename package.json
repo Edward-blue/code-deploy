@@ -1,12 +1,18 @@
 {
   "name": "@akairos/code-deploy",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "description": "Configurable local-to-SSH directory publishing with an Ink terminal interface",
   "type": "module",
-  "bin": { "code-deploy": "dist/cli.js" },
-  "files": ["dist"],
-  "engines": { "node": ">=22" },
+  "bin": {
+    "code-deploy": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc",
     "prepack": "tsc",
