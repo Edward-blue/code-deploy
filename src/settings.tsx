@@ -1,0 +1,167 @@
+import { useState } from "react";
+import { Box, Text, useInput } from "ink";
+import { PasswordInput, TextInput } from "@inkjs/ui";
+import { homedir } from "node:os";
+import { newProfile, profileSchema, type Config, type Profile } from "./config.js";
+import { savePassword } from "./credentials.js";
+import { captureMapping } from "./preflight.js";
+
+export const colors = { accent: "#A78BFA", warm: "#E8BC73", muted: "#7C8499", good: "#8DC7A5", error: "#E88E8E" };
+export const authNames = { env: "环境变量", keychain: "系统钥匙串", ssh: "SSH 密钥 / Agent" };
+type Field = Exclude<keyof Profile, "mapping">;
+type FieldDef = { key: Field; label: string; hint: string };
+
+// 向导按此顺序逐项提问；已答项留在上方可回看。
+const fields: FieldDef[] = [
+  { key: "id", label: "环境标识", hint: "小写字母、数字、连字符；创建后固定" },
+  { key: "name", label: "显示名称", hint: "为这条发布配置取一个名称" },
+  { key: "projectDir", label: "本地目录 A", hint: "目录锁或映射锁开启时必须在此目录运行；未锁定时使用启动目录" },
+  { key: "host", label: "目标服务器", hint: "IP、域名或 SSH 别名" },
+  { key: "user", label: "登录账号", hint: "服务器上的 SSH 登录账号" },
+  { key: "port", label: "SSH 端口", hint: "服务器的 SSH 端口" },
+  { key: "remoteDir", label: "远程目录 B", hint: "发布时整体替换此目录，旧内容保留为同级备份" },
+  { key: "buildCommand", label: "构建命令", hint: "在源目录执行；留空表示直接发布已有内容" },
+  { key: "outputDir", label: "发布内容", hint: "源目录内的相对路径；. 表示整个源目录，dist 表示构建产物" },
+  { key: "expectedBranch", label: "指定分支", hint: "开启分支锁时必须填写；关闭时仅保存此值，不限制发布" },
+  { key: "lockDirectory", label: "锁定本地目录", hint: "开启后只能在本地目录 A 本身运行；子目录也不允许" },
+  { key: "lockBranch", label: "锁定发布分支", hint: "发布时检查实际分支等于指定分支，用错分支时拦截提醒" },
+  { key: "lockMapping", label: "锁定映射关系", hint: "记录目录 A 与服务器、目录 B 的对应关系；分支由分支锁单独约束；需在目录 A 开启" },
+  { key: "checkGit", label: "Git 状态检查", hint: "默认开启；刷新上游，检查未提交、未拉取及未推送代码，异常时等待确认" },
+  { key: "auth", label: "登录方式", hint: "支持 SSH 密钥、环境变量或系统钥匙串" },
+  { key: "passwordEnv", label: "密码环境变量", hint: "仅环境变量认证使用；这里填写变量名，不是密码" }
+];
+const actions = ["保存配置", "保存钥匙串密码", "取消修改"];
+const protectedFields: Field[] = ["projectDir", "host", "user", "port", "remoteDir", "expectedBranch"];
+const message = (error: unknown) => error instanceof Error ? error.message : String(error);
+
+export function fieldValue(profile: Profile, key: Field): string {
+  if (typeof profile[key] === "boolean") return profile[key] ? "开启" : "关闭";
+  if (key === "auth") return authNames[profile.auth];
+  return String(profile[key] || "（未设置）");
+}
+
+// 引导式向导：一次只问当前一项，已答项保留在上方；↑↓ 回看或跳过。
+export function Settings({ config, profile, initial, onSave, onCancel }: {
+  config: Config; profile?: Profile; initial?: Profile;
+  onSave: (profile: Profile) => Promise<void>; onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState<Profile>(initial || profile || newProfile);
+  const [step, setStep] = useState(0);
+  const [choice, setChoice] = useState(0);
+  const [enteringPassword, setEnteringPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const field = fields[step];
+  const done = step >= fields.length;
+  const fixed = field?.key === "id" && Boolean(profile);
+  const locked = Boolean(field && draft.lockMapping && protectedFields.includes(field.key));
+  const isBoolean = field ? typeof draft[field.key] === "boolean" : false;
+
+  async function attempt(task: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true); setError("");
+    try { await task(); } catch (failure) { setError(message(failure)); } finally { setBusy(false); }
+  }
+  async function save() {
+    if (!profile && config.profiles.some(item => item.id === draft.id)) throw new Error("环境标识已存在");
+    profileSchema.parse(draft);
+    if (draft.lockBranch && !draft.expectedBranch) throw new Error("开启分支锁时必须填写指定分支");
+    await onSave(draft);
+  }
+  function advance() { setError(""); setStep(current => Math.min(fields.length, current + 1)); }
+  function submitText(raw: string) {
+    if (!field) return;
+    let value: string | number = field.key === "port" ? Number(raw) : raw.trim();
+    if (field.key === "projectDir" && typeof value === "string" && value.startsWith("~/")) value = `${homedir()}/${value.slice(2)}`;
+    const result = profileSchema.shape[field.key].safeParse(value);
+    if (!result.success) { setError(result.error.issues[0]!.message); return; }
+    setDraft({ ...draft, [field.key]: result.data });
+    advance();
+  }
+  function toggleBoolean() {
+    if (!field) return;
+    const value = draft[field.key];
+    if (field.key === "lockMapping" && !value) void attempt(async () => { setDraft(await captureMapping(profileSchema.parse(draft))); });
+    else setDraft({ ...draft, [field.key]: !value });
+  }
+  function cycleAuth(direction: number) {
+    const order = Object.keys(authNames) as Profile["auth"][];
+    setDraft({ ...draft, auth: order[(order.indexOf(draft.auth) + direction + order.length) % order.length]! });
+  }
+  useInput((input, key) => {
+    if (key.ctrl && input === "s") { void attempt(save); return; }
+    if (busy) return;
+    if (key.escape) {
+      if (enteringPassword) { setEnteringPassword(false); setError(""); }
+      else onCancel();
+      return;
+    }
+    if (enteringPassword) return;
+    if (done) {
+      if (key.leftArrow) setChoice((choice + actions.length - 1) % actions.length);
+      if (key.rightArrow) setChoice((choice + 1) % actions.length);
+      if (key.upArrow) setStep(fields.length - 1);
+      if (!key.return) return;
+      setError("");
+      if (choice === 0) void attempt(save);
+      else if (choice === 1) setEnteringPassword(true);
+      else onCancel();
+      return;
+    }
+    if (!field) return;
+    if (key.upArrow) { setError(""); setStep(Math.max(0, step - 1)); return; }
+    if (key.downArrow) { advance(); return; }
+    if (fixed || locked) { if (key.return) advance(); return; }
+    if (isBoolean) {
+      if (input === " " || key.leftArrow || key.rightArrow) toggleBoolean();
+      if (key.return) advance();
+      return;
+    }
+    if (field.key === "auth") {
+      if (key.leftArrow) cycleAuth(-1);
+      if (key.rightArrow || input === " ") cycleAuth(1);
+      if (key.return) advance();
+      return;
+    }
+    // 文本字段的 Enter 由 TextInput 的 onSubmit 处理
+  });
+
+  return <Box flexDirection="column" flexGrow={1}>
+    <Text bold color={colors.warm}>{profile ? "编辑配置" : "新建配置"} <Text color={colors.muted}>· {Math.min(step + 1, fields.length)}/{fields.length} · 已答项保留在上方</Text></Text>
+    <Box flexDirection="column" marginTop={1}>
+      {fields.slice(0, step).map(item => <Box key={item.key}>
+        <Box width={16} flexShrink={0}><Text color={colors.muted} wrap="truncate">{item.label}</Text></Box>
+        <Box flexGrow={1} minWidth={0}><Text wrap="truncate" color={typeof draft[item.key] === "boolean" ? (draft[item.key] ? colors.good : colors.muted) : (!draft[item.key] ? colors.muted : undefined)}>{fieldValue(draft, item.key)}</Text></Box>
+      </Box>)}
+      {!done && field && <Box flexDirection="column" marginTop={step > 0 ? 1 : 0}>
+        <Box>
+          <Box width={16} flexShrink={0}><Text bold color={colors.accent} wrap="truncate">› {field.label}</Text></Box>
+          <Box flexGrow={1} minWidth={0}>
+            {isBoolean || field.key === "auth"
+              ? <Text color={isBoolean && !draft[field.key] ? colors.muted : colors.accent}>{fieldValue(draft, field.key)} <Text color={colors.muted}>（←→ 切换）</Text></Text>
+              : fixed || locked
+                ? <Text wrap="truncate">{fieldValue(draft, field.key)} <Text color={colors.muted}>（{fixed ? "创建后固定" : "映射锁已锁定"}）</Text></Text>
+                : <TextInput key={`${field.key}-${step}`} defaultValue={String(draft[field.key] || "")} onSubmit={submitText} />}
+          </Box>
+        </Box>
+        <Text color={colors.muted} wrap="truncate">  {field.hint}</Text>
+      </Box>}
+      {done && <Box flexDirection="column" marginTop={1}>
+        <Box gap={2}>
+          {actions.map((label, offset) => <Text key={label} bold={offset === choice} color={offset === choice ? colors.accent : colors.muted}>{offset === choice ? "› " : "  "}{label}</Text>)}
+        </Box>
+        <Text color={colors.muted}>←→ 选择 · Enter 确认 · ↑ 返回修改</Text>
+        {enteringPassword && <PasswordInput onSubmit={password => void attempt(async () => {
+          const parsed = profileSchema.parse(draft);
+          await savePassword(parsed, password);
+          setDraft({ ...parsed, auth: "keychain" }); setEnteringPassword(false);
+        })} />}
+      </Box>}
+      {draft.lockMapping && draft.mapping && <Text color={colors.warm} wrap="truncate">锁定映射：{draft.mapping.projectDir} → {draft.mapping.host}:{draft.mapping.remoteDir}（分支由分支锁单独约束）</Text>}
+      {error && <Text color={colors.error} wrap="truncate">{error}</Text>}
+    </Box>
+    <Box marginTop={1} flexDirection="column">
+      <Text color={colors.muted} wrap="truncate">{busy ? "正在处理…" : "Enter 确认 · ↑↓ 上一项 / 跳过 · Ctrl+S 保存 · Esc 取消"}</Text>
+    </Box>
+  </Box>;
+}

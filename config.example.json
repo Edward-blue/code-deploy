@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "demo-test",
+      "name": "示例项目 · 测试",
+      "projectDir": "/path/to/project",
+      "host": "server-alias",
+      "user": "deploy",
+      "port": 22,
+      "remoteDir": "/data/web/example_test/dist",
+      "buildCommand": "npm run build",
+      "outputDir": "dist",
+      "expectedBranch": "main",
+      "auth": "env",
+      "passwordEnv": "DEPLOY_SERVER_PASSWORD",
+      "lockDirectory": false,
+      "lockBranch": false,
+      "lockMapping": false,
+      "checkGit": true
+    }
+  ]
+}

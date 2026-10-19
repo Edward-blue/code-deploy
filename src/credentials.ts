@@ -1,0 +1,26 @@
+import { AsyncEntry } from "@napi-rs/keyring";
+import type { Profile } from "./config.js";
+
+// 凭据绑定环境及服务器，编辑目标后不会误用旧服务器密码。
+function entry(profile: Profile): AsyncEntry {
+  return new AsyncEntry("code-deploy", `${profile.id}:${profile.user}@${profile.host}:${profile.port}`);
+}
+
+export async function savePassword(profile: Profile, password: string): Promise<void> {
+  if (!password) throw new Error("密码不能为空");
+  await entry(profile).setPassword(password);
+}
+
+export async function deletePassword(profile: Profile): Promise<void> {
+  await entry(profile).deletePassword();
+}
+
+// 密码仅传给 SSH 子进程，不写配置、命令行参数或日志。
+export async function resolvePassword(profile: Profile): Promise<string | undefined> {
+  if (profile.auth === "ssh") return undefined;
+  const password = profile.auth === "env" ? process.env[profile.passwordEnv] : await entry(profile).getPassword();
+  if (!password) throw new Error(profile.auth === "env"
+    ? `请设置环境变量 ${profile.passwordEnv}，或在环境设置中改用钥匙串密码`
+    : "钥匙串中没有此环境的密码，请在环境设置中保存");
+  return password;
+}

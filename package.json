@@ -1,0 +1,29 @@
+{
+  "name": "code-deploy",
+  "version": "0.2.0",
+  "license": "MIT",
+  "description": "Configurable local-to-SSH directory publishing with an Ink terminal interface",
+  "type": "module",
+  "bin": { "code-deploy": "dist/cli.js" },
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.tsx",
+    "start": "node dist/cli.js",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@inkjs/ui": "^2.0.0",
+    "@napi-rs/keyring": "^2.1.1",
+    "ink": "^8.0.0",
+    "react": "^19.2.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "ink-testing-library": "^4.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
